@@ -91,10 +91,74 @@ router.post('/api/login', async (req, res) => {
 });
 
 
+// router.post('/api/donationnew', async (req, res) => {
+//   const db = await connectToDB();
+//   try {
+//     const title = req.body.title;
+
+//     // Initialize arrays to hold the food data
+//     const foodNames = req.body.foodname;
+//     const quantities = req.body.quantity;
+//     const typesOfFood = req.body.typeoffood;
+//     const expiryDates = req.body.expiry_date;
 
 
+//     // Prepare the donation data
+//     const donationData = {
+//       title,
+//       foodNames,
+//       quantities,
+//       typesOfFood,
+//       expiryDates,
+//       createdAt: new Date(),
+//       modifiedAt: new Date(),
+//     };
 
+//     // Insert data into the database
+//     const result = await db.collection("donations").insertOne(donationData);
+    
+//     // Respond with the inserted ID
+//     res.status(201).json({ id: result.insertedId });
+//     console.log('Donation data inserted:', result);
+//   } catch (err) {
+//     console.error('Error inserting donation data:', err);
+//     res.status(500).json({ message: 'Internal Server Error' });
+//   } finally {
+//     await db.client.close(); // Ensure the database connection is closed
+//   }
+// });
+router.post('/api/donationnew', async (req, res) => {
+  const db = await connectToDB();
+  try {
+    // Destructure title and foodItems from the request body
+    const title = req.body.title;
+    const foods = req.body.foodItems; // Correctly access foodItems
 
+    // Validate input data
+    if (!title || !foods || foods.length === 0) {
+      return res.status(400).json({ message: 'Bad Request: Missing required fields.' });
+    }
+
+    // Prepare the donation data
+    const donationData = {
+      title,
+      foodItems: foods,
+      createdAt: new Date(),
+      modifiedAt: new Date(),
+    };
+
+    // Insert the donation data into the database
+    const result = await db.collection('donations').insertOne(donationData);
+
+    // Respond with the inserted ID or a success message
+    res.status(201).json({ id: result.insertedId, message: 'Donation submitted successfully.' });
+  } catch (error) {
+    console.error('Error submitting donation:', error);
+    res.status(500).json({ message: 'Internal Server Error: Unable to submit donation.' });
+  } finally {
+    await db.client.close(); // Ensure the database connection is closed
+  }
+});
 
 
 module.exports = router;
