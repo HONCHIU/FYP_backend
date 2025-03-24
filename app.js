@@ -35,6 +35,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 app.use('/', indexRouter);
 app.use('/api/users', passport.authenticate('bearer', { session: false }), usersRouter);
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 process.env.TOKEN_SECRET = 'secret';
 
 // catch 404 and forward to error handler
