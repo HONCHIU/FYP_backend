@@ -32,6 +32,9 @@ router.post('/api/register', async (req, res) => {
     const company_name = req.body.company_name;
     const email = req.body.email;
     const password = req.body.password;
+    const status = req.body.status;
+    const approved = false;
+    const rejected = false;
 
 
     
@@ -54,7 +57,11 @@ router.post('/api/register', async (req, res) => {
       english_name: english_name,
       company_name: company_name,
       email: email,
+      phone_number: req.body.phone_number,
       password: password,
+      status: status,
+      approved: approved,
+      rejected: rejected,
       createdAt: new Date(),
       modifiedAt: new Date(),
     };
@@ -65,6 +72,26 @@ router.post('/api/register', async (req, res) => {
     res.status(400).json({ message: err.message });
   } finally {
     await db.client.close();
+  }
+});
+
+
+//users
+router.get('/api/users_application', async (req, res) => {
+  const db = await connectToDB();
+  try {
+    // Fetch all users from the database for the given donorId
+    const users = await db.collection('users').find({ approved: false, rejected: false }).toArray();
+
+    
+
+    // Respond with the users
+    res.status(200).json(users);
+  } catch (error) {
+    console.error('Error fetching users:', error); // Log the error for debugging
+    res.status(500).json({ message: 'Internal Server Error: Unable to fetch users.' });
+  } finally {
+    await db.client.close(); // Ensure the database connection is closed
   }
 });
 
@@ -114,6 +141,8 @@ router.post('/api/donationnew', upload.fields([{ name: 'foodPhotos[]', maxCount:
     const donorName = req.body.donorName;
     const status = req.body.status;
     const pick_up_address = req.body.pick_up_address;
+    const pick_up_latitude = req.body.pick_up_latitude;
+    const pick_up_longitude = req.body.pick_up_longitude;
     const collectDate = req.body.collectDate;
     const collectTime = req.body.collectTime;
     const approved = false;
@@ -134,6 +163,8 @@ router.post('/api/donationnew', upload.fields([{ name: 'foodPhotos[]', maxCount:
       donorId,
       donorName,
       pick_up_address,
+      pick_up_latitude,
+      pick_up_longitude,
       collectDate,
       collectTime,
       status,
@@ -227,6 +258,29 @@ router.get('/api/donationdetail/:id', async (req, res) => {
   }
 });
 
+router.get('/api/applicationdetail/:id', async (req, res) => {
+  const db = await connectToDB();
+  try {
+    const applicationId = req.params.id; // 从路由参数中获取 donorId
+
+    // 使用 findOne 获取指定的捐赠记录
+    const application = await db.collection('receivers').findOne({ _id: new ObjectId(applicationId) });
+
+    // 检查是否找到捐赠记录
+    if (!application) {
+      return res.status(404).json({ message: 'No application found.' });
+    }
+
+    // 响应捐赠记录
+    res.status(200).json(application);
+  } catch (error) {
+    console.error('Error fetching application:', error); // 记录错误以供调试
+    res.status(500).json({ message: 'Internal Server Error: Unable to fetch application.' });
+  } finally {
+    await db.client.close(); // 确保关闭数据库连接
+  }
+});
+
 
 //donation
 
@@ -287,8 +341,46 @@ router.put('/api/donation/:id/approve', async (req, res) => {
       return res.status(404).json({ message: 'Donation not found or already approved.' });
     }
 
-    // 返回成功响应
-    res.status(200).json({ message: 'Donation approved successfully.' });
+    //send email
+      // 获取捐赠记录以获取 donorId
+      const donation = await db.collection('donations').findOne({ _id: new ObjectId(donationId) });
+      if (!donation) {
+        return res.status(404).json({ message: 'Donation not found.' });
+      }
+  
+      const donorId = donation.donorId; // 获取 donorId
+  
+      // 从 users 表中获取用户的 email
+      const user = await db.collection('users').findOne({ _id: new ObjectId(donorId) });
+      if (!user) {
+        return res.status(404).json({ message: 'User not found.' });
+      }
+  
+      const email = user.email; // 获取用户的 email
+  
+        // Send the reset email with user ID
+        await transport.sendMail({
+          from: {
+            name: 'f1209057',
+            address: 'f1209057@comp.hkbu.edu.hk',
+          },
+          to: email,
+          subject: 'Donation Approved',
+          text: `
+          Dear ${donation.donorName},
+          
+          We are delighted to inform you that your generous donation of **${donation.title}** has been successfully approved!
+          Thank you for your incredible support in helping those in need. Your contribution makes a significant difference in the lives of many, and we are truly grateful for your kindness.
+          
+          If you have any questions or need further assistance, please do not hesitate to reach out to us. We’re here to help!
+
+          Warm regards,
+          The Donation Team`,
+        });
+    
+        res.status(200).json({ message: 'Reset email sent.' });
+   //end email
+
   } catch (error) {
     console.error('Error approving donation:', error); // 记录错误以便调试
     res.status(500).json({ message: 'Internal Server Error: Unable to approve donation.' });
@@ -313,8 +405,52 @@ router.put('/api/donation/:id/reject', async (req, res) => {
       return res.status(404).json({ message: 'Donation not found or already approved.' });
     }
 
+    //send email
+//send email
+      // 获取捐赠记录以获取 donorId
+      const donation = await db.collection('donations').findOne({ _id: new ObjectId(donationId) });
+      if (!donation) {
+        return res.status(404).json({ message: 'Donation not found.' });
+      }
+  
+      const donorId = donation.donorId; // 获取 donorId
+  
+      // 从 users 表中获取用户的 email
+      const user = await db.collection('users').findOne({ _id: new ObjectId(donorId) });
+      if (!user) {
+        return res.status(404).json({ message: 'User not found.' });
+      }
+  
+      const email = user.email; // 获取用户的 email
+  
+        // Send the reset email with user ID
+        await transport.sendMail({
+          from: {
+            name: 'f1209057',
+            address: 'f1209057@comp.hkbu.edu.hk',
+          },
+          to: email,
+          subject: 'Donation Rejected',
+          text: `
+          Dear ${donation.donorName},
+
+  We regret to inform you that your donation of **${donation.title}** has not been approved at this time. We truly appreciate your willingness to support those in need, and we encourage you to consider donating again in the future.
+  If you have any questions or would like to discuss this further, please feel free to reach out to us. Your support means a lot to us and those we serve.
+
+  Thank you once again for your generosity.
+
+  Best regards,
+  The Donation Team`,
+        });
+    
+        res.status(200).json({ message: 'Reset email sent.' });
+   //end email
+
+
     // 返回成功响应
     res.status(200).json({ message: 'Donation rejected successfully.' });
+
+
   } catch (error) {
     console.error('Error approving donation:', error); // 记录错误以便调试
     res.status(500).json({ message: 'Internal Server Error: Unable to rejected donation.' });
@@ -427,6 +563,8 @@ router.post('/api/applicationnew', upload.none(), async (req, res) => {
     const pickupDate = req.body.pickupDate;
     const pickupTime = req.body.pickupTime;
     const pickupAddress = req.body.pickupAddress;
+    const pickupLatitude = req.body.pickupLatitude;
+    const pickupLongitude = req.body.pickupLongitude;
     const contactInfo = req.body.contactInfo;
     const remarks = req.body.remarks;
     const donationId = req.body.donationId;
@@ -443,6 +581,8 @@ router.post('/api/applicationnew', upload.none(), async (req, res) => {
       pickupDate : pickupDate,
       pickupTime : pickupTime,
       pickupAddress : pickupAddress,
+      pickupLatitude : pickupLatitude,
+      pickupLongitude : pickupLongitude,
       contactInfo : contactInfo,
       remarks : remarks,
       donationId : donationId,
@@ -494,7 +634,8 @@ router.get('/api/donorcontent', async (req, res) => {
   const db = await connectToDB();
   try {
     // Fetch all donations from the database for the given donorId
-    const users = await db.collection('users').find({ role: 'donor' }).toArray();
+    const users = await db.collection('users').find({ role: 'donor',approved: true }).toArray();
+
 
     
 
@@ -722,6 +863,28 @@ router.get('/api/delivery/:id', async (req, res) => {
     await db.client.close(); // Ensure the database connection is closed
   }
 });
+router.get('/api/deliverydetail/:id', async (req, res) => {
+  const db = await connectToDB();
+  try {
+    const deliveryId = req.params.id; // 从路由参数中获取 receiverId
+
+    // 使用 findOne 获取指定的捐赠记录
+    const deliveryContent = await db.collection('delivery').findOne({ _id: new ObjectId(deliveryId) });
+
+    // 检查是否找到捐赠记录
+    if (!deliveryContent) {
+      return res.status(404).json({ message: 'Delivery not found.' });
+    }
+
+    // 响应捐赠记录
+    res.status(200).json(deliveryContent);
+  } catch (error) {
+    console.error('Error fetching delivery:', error); // 记录错误以供调试
+    res.status(500).json({ message: 'Internal Server Error: Unable to fetch delivery.' });
+  } finally {
+    await db.client.close(); // 确保关闭数据库连接
+  }
+});
 
 router.post('/api/delivery', async (req, res) => {
   const db = await connectToDB();
@@ -736,6 +899,7 @@ router.post('/api/delivery', async (req, res) => {
       date: date,
       time: time,
       address: address,
+      status: 'wait', 
       createdAt: new Date(),
       modifiedAt: new Date()
     };
@@ -750,5 +914,78 @@ router.post('/api/delivery', async (req, res) => {
     await db.client.close();
   }
 });
+
+router.get('/api/delivery', async (req, res) => {
+  const db = await connectToDB();
+  try {
+    // Fetch all delivery from the database for the given donorId
+    const delivery = await db.collection('delivery').find({
+      
+         type: 'receive'
+          
+      
+    }).toArray();
+
+   
+
+    // Respond with the delivery
+    res.status(200).json(delivery);
+  } catch (error) {
+    console.error('Error fetching delivery:', error); // Log the error for debugging
+    res.status(500).json({ message: 'Internal Server Error: Unable to fetch delivery.' });
+  } finally {
+    await db.client.close(); // Ensure the database connection is closed
+  }
+});
+
+
+const Nodemailer = require("nodemailer");
+
+const transport = Nodemailer.createTransport({
+  pool: false,
+  host: "mh5.comp.hkbu.edu.hk",
+  port: 465,
+  secure: true, // use TLS
+  auth: {
+    user: "f1209057",
+    pass: "Kevinyip1c33!"
+  },
+  tls: {
+    rejectUnauthorized: false // This will ignore certificate errors
+  }
+});
+
+
+// Password Reset Request Endpoint
+router.post('/api/reset-password', async (req, res) => {
+  const db = await connectToDB();
+
+  const { email } = req.body;
+
+  try {
+    const user = await db.collection("users").findOne({ email:email });
+
+      if (!user) {
+          return res.status(404).json({ message: 'Email not found.' });
+      }
+
+      // Send the reset email with user ID
+      const resetUrl = `http://localhost:5173/reset-password/${user._id}`;
+      await transport.sendMail({
+        from: {
+          name: 'f1233411',
+          address: 'f1233411@comp.hkbu.edu.hk',
+        },
+        to: email,
+        subject: 'Password Reset Request',
+        text: `You requested a password reset. Click the link below to reset your password:\n${resetUrl}`,
+      });
+  
+      res.status(200).json({ message: 'Reset email sent.' });
+    } catch (error) {
+      console.error('Error during password reset:', error);
+      res.status(500).json({ message: 'Internal server error.' });
+    }
+  });
 
 module.exports = router;
