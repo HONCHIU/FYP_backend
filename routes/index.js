@@ -394,70 +394,66 @@ router.put('/api/donation/:id/reject', async (req, res) => {
   const donationId = req.params.id; // 从请求参数中获取捐赠记录的 ID
 
   try {
-    // 更新捐赠记录的 approved 字段为 true
+    // 更新捐赠记录的 rejected 字段为 true
     const result = await db.collection('donations').updateOne(
       { _id: new ObjectId(donationId) }, // 使用 MongoDB ObjectId 查询
-      { $set: { rejected: true,status: 'Rejected', modifiedAt: new Date() } } // 更新 approved 字段和 modifiedAt
+      { $set: { rejected: true, status: 'Rejected', modifiedAt: new Date() } } // 更新 rejected 字段和 modifiedAt
     );
 
     // 检查是否成功更新
     if (result.modifiedCount === 0) {
-      return res.status(404).json({ message: 'Donation not found or already approved.' });
+      return res.status(404).json({ message: 'Donation not found or already rejected.' });
     }
 
-    //send email
-//send email
-      // 获取捐赠记录以获取 donorId
-      const donation = await db.collection('donations').findOne({ _id: new ObjectId(donationId) });
-      if (!donation) {
-        return res.status(404).json({ message: 'Donation not found.' });
-      }
+    // 获取捐赠记录以获取 donorId
+    const donation = await db.collection('donations').findOne({ _id: new ObjectId(donationId) });
+    if (!donation) {
+      return res.status(404).json({ message: 'Donation not found.' });
+    }
   
-      const donorId = donation.donorId; // 获取 donorId
+    const donorId = donation.donorId; // 获取 donorId
   
-      // 从 users 表中获取用户的 email
-      const user = await db.collection('users').findOne({ _id: new ObjectId(donorId) });
-      if (!user) {
-        return res.status(404).json({ message: 'User not found.' });
-      }
+    // 从 users 表中获取用户的 email
+    const user = await db.collection('users').findOne({ _id: new ObjectId(donorId) });
+    if (!user) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
   
-      const email = user.email; // 获取用户的 email
+    const email = user.email; // 获取用户的 email
   
-        // Send the reset email with user ID
-        await transport.sendMail({
-          from: {
-            name: 'f1209057',
-            address: 'f1209057@comp.hkbu.edu.hk',
-          },
-          to: email,
-          subject: 'Donation Rejected',
-          text: `
-          Dear ${donation.donorName},
+    // Send the rejection email
+    await transport.sendMail({
+      from: {
+        name: 'f1209057',
+        address: 'f1209057@comp.hkbu.edu.hk',
+      },
+      to: email,
+      subject: 'Donation Rejected',
+      text: `
+      Dear ${donation.donorName},
 
-  We regret to inform you that your donation of **${donation.title}** has not been approved at this time. We truly appreciate your willingness to support those in need, and we encourage you to consider donating again in the future.
-  If you have any questions or would like to discuss this further, please feel free to reach out to us. Your support means a lot to us and those we serve.
+      We regret to inform you that your donation of **${donation.title}** has not been approved at this time. We truly appreciate your willingness to support those in need, and we encourage you to consider donating again in the future.
+      If you have any questions or would like to discuss this further, please feel free to reach out to us. Your support means a lot to us and those we serve.
 
-  Thank you once again for your generosity.
+      Thank you once again for your generosity.
 
-  Best regards,
-  The Donation Team`,
-        });
-    
-        res.status(200).json({ message: 'Reset email sent.' });
-   //end email
-
+      Best regards,
+      The Donation Team`,
+    });
 
     // 返回成功响应
-    res.status(200).json({ message: 'Donation rejected successfully.' });
-
+    return res.status(200).json({ message: 'Donation rejected successfully and email sent.' });
 
   } catch (error) {
     console.error('Error approving donation:', error); // 记录错误以便调试
-    res.status(500).json({ message: 'Internal Server Error: Unable to rejected donation.' });
+    if (!res.headersSent) {
+      return res.status(500).json({ message: 'Internal Server Error: Unable to reject donation.' });
+    }
   } finally {
     await db.client.close(); // 确保数据库连接关闭
   }
 });
+
 
 //reciver
 
@@ -508,7 +504,7 @@ router.put('/api/receivers/:id/approve', async (req, res) => {
     // 更新捐赠记录的 approved 字段为 true
     const result = await db.collection('receivers').updateOne(
       { _id: new ObjectId(receiversId) }, // 使用 MongoDB ObjectId 查询
-      { $set: { approved: true,status: 'Approved', modifiedAt: new Date() } } // 更新 approved 字段和 modifiedAt
+      { $set: { approved: true, status: 'Approved', modifiedAt: new Date() } } // 更新 approved 字段和 modifiedAt
     );
 
     // 检查是否成功更新
@@ -516,15 +512,54 @@ router.put('/api/receivers/:id/approve', async (req, res) => {
       return res.status(404).json({ message: 'Receivers not found or already approved.' });
     }
 
-    // 返回成功响应
-    res.status(200).json({ message: 'Receivers approved successfully.' });
+    // 获取捐赠记录以获取 receiverId
+    const application = await db.collection('receivers').findOne({ _id: new ObjectId(receiversId) });
+    if (!application) {
+      return res.status(404).json({ message: 'Application not found.' });
+    }
+
+    const applicantId = application.applicantId; // 获取 donorId
+
+    // 从 users 表中获取用户的 email
+    const user = await db.collection('users').findOne({ _id: new ObjectId(applicantId) });
+    if (!user) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+
+    const email = user.email; // 获取用户的 email
+
+    // Send the approval email
+    await transport.sendMail({
+      from: {
+        name: 'f1209057',
+        address: 'f1209057@comp.hkbu.edu.hk',
+      },
+      to: email,
+      subject: 'Application Approved',
+      text: `
+Dear ${application.applicant},
+
+We are delighted to inform you that your application of food **${application.title}** has been successfully approved!
+
+Thank you for your generous willingness to support those in need. 
+
+If you have any questions or need further assistance, please do not hesitate to reach out to us. We are here to help!
+
+Best regards,
+The Donation Team`,
+    });
+
+    // Send a single success response
+    return res.status(200).json({ message: 'Receivers approved successfully and email sent.' });
+
   } catch (error) {
     console.error('Error approving receivers:', error); // 记录错误以便调试
-    res.status(500).json({ message: 'Internal Server Error: Unable to approve receivers.' });
+    return res.status(500).json({ message: 'Internal Server Error: Unable to approve receivers.' });
   } finally {
     await db.client.close(); // 确保数据库连接关闭
   }
 });
+
 
 router.put('/api/receivers/:id/reject', async (req, res) => {
   const db = await connectToDB();
@@ -541,6 +576,45 @@ router.put('/api/receivers/:id/reject', async (req, res) => {
     if (result.modifiedCount === 0) {
       return res.status(404).json({ message: 'Receivers not found or already rejected.' });
     }
+    const application = await db.collection('receivers').findOne({ _id: new ObjectId(receiversId) });
+    if (!application) {
+      return res.status(404).json({ message: 'Application not found.' });
+    }
+
+    const applicantId = application.applicantId; // 获取 donorId
+
+    // 从 users 表中获取用户的 email
+    const user = await db.collection('users').findOne({ _id: new ObjectId(applicantId) });
+    if (!user) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+
+    const email = user.email; // 获取用户的 email
+
+    // Send the approval email
+    await transport.sendMail({
+      from: {
+        name: 'f1209057',
+        address: 'f1209057@comp.hkbu.edu.hk',
+      },
+      to: email,
+      subject: 'Application Rejected',
+      text: `
+Dear ${application.applicant},
+
+We regret to inform you that your application for food **${application.title}** has been rejected.
+
+We appreciate your willingness to support those in need, and we encourage you to apply again in the future. If you have any questions or would like more information about the decision, please feel free to reach out to us.
+
+Thank you for your understanding.
+
+Best regards,
+The Donation Team`,
+    });
+
+    // Send a single success response
+    return res.status(200).json({ message: 'Receivers approved successfully and email sent.' });
+
 
     // 返回成功响应
     res.status(200).json({ message: 'Receivers application rejected successfully.' });
